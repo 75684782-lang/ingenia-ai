@@ -296,7 +296,11 @@ export function updateStatus(payload) {
   const pillCivil = $("#pill-civil");
   pillCivil.className = `pill ${civilConnected ? "ok" : "warn"}`;
 
-  $("#p-ollama").textContent = ollamaOk ? "Disponible en 127.0.0.1:11434" : "No disponible";
+  $("#p-ollama").textContent = ollamaOk
+    ? payload.remote
+      ? "Disponible en tu PC vinculada"
+      : "Disponible en este equipo"
+    : "No disponible";
   const civilText = civilConnected
     ? "Complemento conectado"
     : civil.mode === "mock"
@@ -315,7 +319,9 @@ export function updateStatus(payload) {
       ? civilConnected
         ? "Ollama y Civil 3D disponibles."
         : "Ollama disponible. Civil 3D no está conectado: las operaciones no se ejecutarán."
-      : "Ollama no responde. Inicia el servicio local para conversar.";
+      : payload.remote
+        ? "Conecta tu PC e inicia Ollama para conversar."
+        : "Ollama no responde. Inicia el servicio local para conversar.";
   }
 }
 

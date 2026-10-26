@@ -27,6 +27,22 @@ class PullModelRequest(BaseModel):
     model: str = Field(..., min_length=1, max_length=120)
 
 
+class RegisterRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=200)
+    password: str = Field(..., min_length=8, max_length=200)
+    name: str = Field("", max_length=120)
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=200)
+    password: str = Field(..., min_length=1, max_length=200)
+
+
+class PairRequest(BaseModel):
+    code: str = Field(..., min_length=4, max_length=20)
+    name: str = Field("Mi PC", max_length=80)
+
+
 class HealthResponse(BaseModel):
     status: str
     app: str

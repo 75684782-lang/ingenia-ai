@@ -27,7 +27,15 @@ const state = {
   streaming: false,
   controller: null,
   welcomeMessage: "",
+  account: null,
+  accountsEnabled: false,
+  agentsEnabled: false,
+  pairCountdown: null,
 };
+
+function sessionKey() {
+  return state.account ? `ingenia.session.${state.account.id}` : "ingenia.session";
+}
 
 function setTitle(title) {
   $("#chat-title").textContent = title || "Nueva conversación";
@@ -103,10 +111,104 @@ async function refreshStatus() {
       getJSON("/api/ollama/status"),
       getJSON("/api/civil3d/status"),
     ]);
-    updateStatus({ ollama, civil3d: civil });
+    updateStatus({
+      ollama,
+      civil3d: civil,
+      remote: Boolean(state.account),
+    });
   } catch (err) {
     console.error(err);
   }
+}
+
+async function refreshAgents() {
+  if (!state.agentsEnabled) return;
+  const list = $("#agent-list");
+  try {
+    const data = await getJSON("/api/agents");
+    list.replaceChildren();
+    if (!data.agents.length) {
+      const empty = document.createElement("p");
+      empty.className = "empty-hint";
+      empty.textContent = "Aún no hay PCs vinculadas.";
+      list.appendChild(empty);
+      return;
+    }
+    for (const agent of data.agents) {
+      const row = document.createElement("div");
+      row.className = "agent-item";
+      const label = document.createElement("span");
+      label.textContent = agent.name;
+      const status = document.createElement("em");
+      status.textContent = agent.online ? "conectada" : "desconectada";
+      const revoke = document.createElement("button");
+      revoke.className = "btn btn-ghost";
+      revoke.type = "button";
+      revoke.textContent = "Desvincular";
+      revoke.addEventListener("click", async () => {
+        if (!confirm(`¿Desvincular ${agent.name}?`)) return;
+        try {
+          await fetch(`/api/agents/${encodeURIComponent(agent.id)}`, {
+            method: "DELETE",
+            credentials: "same-origin",
+          }).then(async (response) => {
+            if (!response.ok) throw await parseResponseError(response);
+          });
+          await refreshAgents();
+          await refreshStatus();
+        } catch (err) {
+          toast(err.message, true);
+        }
+      });
+      row.append(label, status, revoke);
+      list.appendChild(row);
+    }
+  } catch (err) {
+    list.textContent = err.message;
+  }
+}
+
+async function createPairCode() {
+  const button = $("#pair-btn");
+  button.disabled = true;
+  try {
+    const data = await postJSON("/api/agents/pair-code", {});
+    $("#pair-code").textContent = data.code;
+    $("#pair-code-box").hidden = false;
+    const expiry = Date.now() + data.expires_in * 1000;
+    clearInterval(state.pairCountdown);
+    const update = () => {
+      const remaining = Math.max(0, Math.ceil((expiry - Date.now()) / 1000));
+      $("#pair-expiry").textContent = remaining
+        ? `Código válido durante ${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, "0")}.`
+        : "Código vencido. Genera uno nuevo.";
+      if (!remaining) clearInterval(state.pairCountdown);
+    };
+    update();
+    state.pairCountdown = setInterval(update, 1000);
+    try {
+      await navigator.clipboard?.writeText(data.code);
+      toast("Código generado y copiado.");
+    } catch {
+      toast("Código generado. Cópialo para ingresarlo en el conector.");
+    }
+    await refreshAgents();
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function parseResponseError(response) {
+  let message = `${response.status} ${response.statusText}`;
+  try {
+    const body = await response.json();
+    if (body.detail) message = body.detail;
+  } catch {
+    // Keep the HTTP status when the response has no JSON body.
+  }
+  return new Error(message);
 }
 
 async function loadModels() {
@@ -332,7 +434,7 @@ async function stopGeneration() {
 
 async function newChat() {
   state.sessionId = null;
-  localStorage.removeItem("ingenia.session");
+  localStorage.removeItem(sessionKey());
   clearChat();
   showWelcome(state.welcomeMessage);
   setTitle("Nueva conversación");
@@ -345,7 +447,7 @@ async function loadSession(session) {
     const data = await getJSON(`/api/sessions/${encodeURIComponent(session.id)}/messages`);
     clearChat();
     state.sessionId = session.id;
-    localStorage.setItem("ingenia.session", session.id);
+    localStorage.setItem(sessionKey(), session.id);
     setTitle(session.title || "Conversación");
     setSubtitle(`Actualizada ${formatTime(session.updated_at)}`);
     for (const message of data.messages || []) {
@@ -372,7 +474,10 @@ function connectStatusSocket() {
     const socket = new WebSocket(`${protocol}://${location.host}/ws/status`);
     socket.addEventListener("message", (event) => {
       try {
-        updateStatus(JSON.parse(event.data));
+        updateStatus({
+          ...JSON.parse(event.data),
+          remote: Boolean(state.account),
+        });
       } catch (err) {
         console.error(err);
       }
@@ -390,6 +495,7 @@ function bindEvents() {
   $("#refresh-history").addEventListener("click", refreshHistory);
   $("#refresh-ops").addEventListener("click", refreshOperations);
   $("#pull-btn").addEventListener("click", pullModel);
+  $("#pair-btn").addEventListener("click", createPairCode);
   $("#pull-model").addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
@@ -437,6 +543,70 @@ function bindEvents() {
   });
 }
 
+function setAuthMode(mode) {
+  const register = mode === "register";
+  $("#auth-name-field").hidden = !register;
+  $("#auth-name").required = register;
+  $("#auth-password").autocomplete = register ? "new-password" : "current-password";
+  $("#auth-submit").textContent = register ? "Crear cuenta" : "Iniciar sesión";
+  $("#auth-login-tab").classList.toggle("btn-ghost", register);
+  $("#auth-register-tab").classList.toggle("btn-ghost", !register);
+  $("#auth-login-tab").setAttribute("aria-selected", String(!register));
+  $("#auth-register-tab").setAttribute("aria-selected", String(register));
+  $("#auth-error").textContent = "";
+  $("#auth-form").dataset.mode = mode;
+}
+
+function bindAuthEvents() {
+  setAuthMode("login");
+  $("#auth-login-tab").addEventListener("click", () => setAuthMode("login"));
+  $("#auth-register-tab").addEventListener("click", () => setAuthMode("register"));
+  $("#auth-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const mode = event.currentTarget.dataset.mode || "login";
+    const submit = $("#auth-submit");
+    submit.disabled = true;
+    $("#auth-error").textContent = "";
+    const payload = {
+      email: $("#auth-email").value.trim(),
+      password: $("#auth-password").value,
+    };
+    if (mode === "register") payload.name = $("#auth-name").value.trim();
+    try {
+      await postJSON(`/api/auth/${mode}`, payload);
+      location.reload();
+    } catch (err) {
+      $("#auth-error").textContent = err.message;
+    } finally {
+      submit.disabled = false;
+    }
+  });
+  $("#logout-btn").addEventListener("click", async () => {
+    try {
+      await postJSON("/api/auth/logout", {});
+      location.reload();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+}
+
+async function prepareAccount() {
+  bindAuthEvents();
+  const mode = await getJSON("/api/auth/mode");
+  state.accountsEnabled = Boolean(mode.accounts);
+  if (!state.accountsEnabled) return true;
+  if (!mode.user) {
+    $("#app-shell").hidden = true;
+    $("#auth-screen").hidden = false;
+    return false;
+  }
+  state.account = mode.user;
+  $("#account-controls").hidden = false;
+  $("#account-name").textContent = mode.user.name || mode.user.email;
+  return true;
+}
+
 const GUIDE_SEEN_KEY = "ingenia.guide.seen.v1";
 const GUIDE_SESSION_KEY = "ingenia.guide.session.v1";
 
@@ -464,10 +634,25 @@ function closeGuide() {
 function initGuide() {
   const demo = !isLocalApp();
   if (demo) {
-    $("#guide-demo-note").hidden = false;
+    const note = $("#guide-demo-note");
+    note.hidden = false;
     const pill = $("#demo-pill");
-    if (pill) pill.hidden = false;
-    setSubtitle("Demo alojada · La IA y Civil 3D se ejecutan en tu PC. Abre la Guía para instalarla.");
+    if (pill) {
+      pill.hidden = false;
+      if (state.accountsEnabled) pill.textContent = "Conectar PC";
+    }
+    if (state.accountsEnabled) {
+      note.textContent =
+        "La web está alojada; tu Ollama y Civil 3D permanecen en tu PC. Vincula el conector desde el panel Mi PC.";
+      $("#guide-title").textContent = "Conecta tu PC con Ingenia AI";
+      setSubtitle("Conecta tu PC para usar Ollama y Civil 3D desde esta web.");
+      const localInstall = document.querySelector(".guide-steps li:nth-child(3)");
+      localInstall.querySelector("strong").textContent = "Vincula tu PC con la web";
+      localInstall.querySelector("p").textContent =
+        "Inicia sesión, abre Mi PC en el panel derecho, genera un código y ejecútalo en el conector local. El conector mantiene una conexión cifrada saliente.";
+    } else {
+      setSubtitle("Demo alojada · Conecta el conector local desde Mi PC para trabajar con tus programas.");
+    }
   }
   $("#guide-hide").checked = Boolean(localStorage.getItem(GUIDE_SEEN_KEY));
 
@@ -497,6 +682,14 @@ function initGuide() {
 }
 
 async function init() {
+  try {
+    if (!(await prepareAccount())) return;
+  } catch (err) {
+    $("#app-shell").hidden = true;
+    $("#auth-screen").hidden = false;
+    $("#auth-error").textContent = err.message;
+    return;
+  }
   bindEvents();
   initGuide();
   updateButtons();
@@ -505,30 +698,41 @@ async function init() {
   try {
     const config = await getJSON("/api/config");
     state.defaultModel = config.default_model;
+    state.agentsEnabled = Boolean(config.agents_enabled && state.account);
+    $("#card-connect").hidden = !state.agentsEnabled;
     $("#cfg-api").textContent = location.origin;
+    $("#cfg-location").textContent = state.account ? "web" : "local";
     $("#cfg-model").textContent = config.default_model || "—";
     $("#cfg-fallback").textContent = config.civil3d_fallback_to_mock ? "activado" : "desactivado";
   } catch (err) {
     console.error(err);
   }
 
-  await Promise.all([loadModels(), refreshTools(), refreshStatus(), refreshHistory(), refreshOperations()]);
+  await Promise.all([
+    loadModels(),
+    refreshTools(),
+    refreshStatus(),
+    refreshHistory(),
+    refreshOperations(),
+    refreshAgents(),
+  ]);
   connectStatusSocket();
+  if (state.agentsEnabled) setInterval(refreshAgents, 10000);
 
-  if (!isLocalApp()) {
+  if (!isLocalApp() && !state.accountsEnabled) {
     const note = $("#welcome-note");
     if (note) {
       note.textContent = "Demo alojada: descarga e instala la app para conectar tu Ollama y Civil 3D.";
     }
   }
 
-  const saved = localStorage.getItem("ingenia.session");
+  const saved = localStorage.getItem(sessionKey());
   if (saved) {
     try {
       const data = await getJSON(`/api/sessions/${encodeURIComponent(saved)}/messages`);
       if (data.session) await loadSession(data.session);
     } catch {
-      localStorage.removeItem("ingenia.session");
+      localStorage.removeItem(sessionKey());
     }
   }
 }

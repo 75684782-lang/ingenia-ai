@@ -33,6 +33,15 @@ class Settings(BaseSettings):
     cookie_secure: bool = Field(
         False, validation_alias=AliasChoices("INGENIA_COOKIE_SECURE")
     )
+    accounts_enabled: bool = Field(
+        False, validation_alias=AliasChoices("INGENIA_ACCOUNTS")
+    )
+    use_agents: bool = Field(
+        False, validation_alias=AliasChoices("INGENIA_USE_AGENTS")
+    )
+    session_days: int = Field(
+        14, validation_alias=AliasChoices("INGENIA_SESSION_DAYS")
+    )
 
     ollama_url: str = Field(
         "http://127.0.0.1:11434", validation_alias=AliasChoices("OLLAMA_URL")

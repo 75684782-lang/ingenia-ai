@@ -25,6 +25,24 @@ class OllamaUnavailable(OllamaError):
     pass
 
 
+def normalize_models(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    models: list[dict[str, Any]] = []
+    for item in payload.get("models", []):
+        details = item.get("details", {}) or {}
+        capabilities = item.get("capabilities") or []
+        models.append(
+            {
+                "name": item.get("name") or item.get("model"),
+                "size": item.get("size"),
+                "parameter_size": details.get("parameter_size"),
+                "capabilities": capabilities,
+                "supports_tools": "tools" in capabilities,
+            }
+        )
+    models.sort(key=lambda m: (not m["supports_tools"], m["name"] or ""))
+    return models
+
+
 class OllamaClient:
     def __init__(
         self,
@@ -43,7 +61,7 @@ class OllamaClient:
             transport=self._transport,
         )
 
-    async def is_available(self) -> bool:
+    async def is_available(self, user_id: str | None = None) -> bool:
         try:
             async with self._client(timeout=3.0) as client:
                 resp = await client.get("/api/tags")
@@ -51,7 +69,7 @@ class OllamaClient:
         except httpx.HTTPError:
             return False
 
-    async def list_models(self) -> list[dict[str, Any]]:
+    async def list_models(self, user_id: str | None = None) -> list[dict[str, Any]]:
         try:
             async with self._client(timeout=10.0) as client:
                 resp = await client.get("/api/tags")
@@ -82,6 +100,7 @@ class OllamaClient:
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
         temperature: float = 0.2,
+        user_id: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         payload: dict[str, Any] = {
             "model": model,
@@ -123,7 +142,7 @@ class OllamaClient:
             raise OllamaUnavailable(f"No se pudo conectar con Ollama: {exc}") from exc
 
 
-    async def pull_model_stream(self, model: str) -> AsyncIterator[dict[str, Any]]:
+    async def pull_model_stream(self, model: str, user_id: str | None = None) -> AsyncIterator[dict[str, Any]]:
         """Download a model through Ollama's /api/pull, streaming progress."""
         if not is_valid_model_name(model):
             raise OllamaError("Nombre de modelo inválido.")
@@ -176,3 +195,4 @@ def extract_tool_calls(message: dict[str, Any]) -> list[dict[str, Any]]:
         if name:
             normalized.append({"name": name, "args": args, "raw": call})
     return normalized
+

@@ -11,10 +11,14 @@ class ConnectorError(RuntimeError):
 class CivilConnector(Protocol):
     mode: str
 
-    async def status(self) -> dict[str, Any]:
+    async def status(self, user_id: str | None = None) -> dict[str, Any]:
         ...
 
     async def call(
-        self, tool: str, args: dict[str, Any], request_id: str
+        self,
+        tool: str,
+        args: dict[str, Any],
+        request_id: str,
+        user_id: str | None = None,
     ) -> dict[str, Any]:
         ...

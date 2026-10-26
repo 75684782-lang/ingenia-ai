@@ -15,6 +15,10 @@ services:
         value: "true"
       - key: INGENIA_AUTH_TOKEN
         generateValue: true
+      - key: INGENIA_ACCOUNTS
+        value: "false"
+      - key: INGENIA_USE_AGENTS
+        value: "false"
       - key: DATABASE_PATH
         value: /tmp/ingenia.db
       - key: CIVIL3D_FALLBACK_TO_MOCK

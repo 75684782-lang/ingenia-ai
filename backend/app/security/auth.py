@@ -6,6 +6,9 @@ from collections import defaultdict, deque
 from fastapi import HTTPException, Request, status
 
 from ..core.config import Settings
+from .passwords import hash_token
+
+SESSION_COOKIE = "ingenia_session"
 
 
 class RateLimiter:
@@ -85,3 +88,58 @@ async def require_local(request: Request) -> None:
         guard = LocalGuard(request.app.state.settings)
         request.app.state.guard = guard
     await guard(request)
+
+
+def session_token(request: Request) -> str | None:
+    cookie = request.cookies.get(SESSION_COOKIE)
+    if cookie:
+        return cookie
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("bearer "):
+        return auth[7:].strip()
+    return None
+
+
+def current_user(request: Request) -> dict | None:
+    if not request.app.state.settings.accounts_enabled:
+        return None
+    token = session_token(request)
+    if not token:
+        return None
+    return request.app.state.store.get_auth_user(hash_token(token))
+
+
+def _guard(request: Request) -> LocalGuard:
+    guard: LocalGuard | None = getattr(request.app.state, "guard", None)
+    if guard is None:
+        guard = LocalGuard(request.app.state.settings)
+        request.app.state.guard = guard
+    return guard
+
+
+async def require_access(request: Request) -> dict | None:
+    """Local token in local mode; authenticated user account in hosted mode."""
+    settings = request.app.state.settings
+    if not settings.accounts_enabled:
+        await require_local(request)
+        return None
+
+    user = current_user(request)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Inicia sesión para continuar.",
+        )
+    request.state.user = user
+    _guard(request).limiter.check(f"user:{user['id']}")
+    return user
+
+
+async def require_user(request: Request) -> dict:
+    user = await require_access(request)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Inicia sesión para continuar.",
+        )
+    return user

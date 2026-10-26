@@ -1,13 +1,21 @@
 # Ingenia AI
 
-Asistente de ingeniería local para **Autodesk Civil 3D**. Conversa en español, interpreta
-órdenes con **Ollama** en tu equipo y ejecuta operaciones reales mediante un complemento
-C# autorizado. Sin nube para la IA.
+Asistente web de ingeniería para **Autodesk Civil 3D**. El usuario trabaja desde la web,
+mientras **Ollama**, el dibujo y el complemento de Civil 3D permanecen en su PC. Un conector
+local mantiene una conexión cifrada saliente y solo retransmite los métodos autorizados.
 
 > Estado honesto: la parte de IA/backend/frontend está implementada y probada. El
 > complemento de Civil 3D está implementado pero **no ha sido compilado ni probado** en
 > este equipo porque Civil 3D no está instalado. Mientras no haya conexión real, todas las
 > operaciones devuelven `mode="mock"` y `ok=false`; nunca se simula un éxito.
+>
+> El backend incluye cuentas y emparejamiento por código para conectar PCs desde la web.
+> La instancia actual de Render sigue en modo demo hasta configurar almacenamiento
+> persistente; no habilites cuentas sobre la base efímera `/tmp`.
+>
+> En el modo web, los archivos DWG permanecen en el PC, pero los mensajes, el historial y
+> los resultados de herramientas atraviesan y se guardan en el servidor. No introduzcas
+> información sensible hasta definir y publicar la política de retención.
 
 ## Requisitos
 
@@ -50,6 +58,7 @@ cd backend
 backend/app/            FastAPI, Ollama, herramientas, conector, seguridad, SQLite
 frontend/               UI oscura sin build (HTML/CSS/JS, módulos ES)
 connectors/civil3d/     Complemento C# (multi-target net48 / net8.0-windows)
+connectors/desktop/     Conector Python local para Ollama y Civil 3D
 scripts/                start / stop / check_environment (.bat + .ps1)
 docs/                   arquitectura, instalación, integración Civil 3D
 ```
@@ -102,4 +111,5 @@ opción recomendada; el 7B sigue disponible si tu equipo lo soporta.
 - [docs/architecture.md](docs/architecture.md)
 - [docs/civil3d-integration.md](docs/civil3d-integration.md)
 - [docs/deployment.md](docs/deployment.md) — qué se puede alojar y qué no
+- [connectors/desktop/README.md](connectors/desktop/README.md) — emparejar una PC a la web
 - [connectors/civil3d/README.md](connectors/civil3d/README.md)

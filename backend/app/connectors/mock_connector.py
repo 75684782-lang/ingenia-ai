@@ -17,7 +17,7 @@ class MockConnector:
 
     mode = "mock"
 
-    async def status(self) -> dict[str, Any]:
+    async def status(self, user_id: str | None = None) -> dict[str, Any]:
         return {
             "connected": False,
             "mode": "mock",
@@ -29,7 +29,8 @@ class MockConnector:
         }
 
     async def call(
-        self, tool: str, args: dict[str, Any], request_id: str
+        self, tool: str, args: dict[str, Any], request_id: str,
+        user_id: str | None = None,
     ) -> dict[str, Any]:
         log.warning("mock call tool=%s request=%s", tool, request_id)
         return {
@@ -44,3 +45,4 @@ class MockConnector:
             ),
             "data": None,
         }
+

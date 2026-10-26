@@ -77,32 +77,44 @@ class ChatService:
         self._cancelled.discard(session_id)
 
     async def stream_reply(
-        self, text: str, session_id: str | None, model: str | None
+        self,
+        text: str,
+        session_id: str | None,
+        model: str | None,
+        user_id: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        session_id = self.store.ensure_session(session_id, title=text.strip()[:60])
+        session_id = self.store.ensure_session(
+            session_id, title=text.strip()[:60], user_id=user_id
+        )
         self.clear_cancel(session_id)
         yield {"type": "session", "session_id": session_id}
 
         self.store.add_message(session_id, "user", text)
-        history = self.store.get_messages(session_id)
+        history = self.store.get_messages(session_id, user_id=user_id)
         messages: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
         for item in history:
             if item["role"] in {"user", "assistant"} and item["content"].strip():
                 messages.append({"role": item["role"], "content": item["content"]})
 
-        async for event in self._loop(session_id, model, messages):
+        async for event in self._loop(session_id, model, messages, user_id=user_id):
             yield event
 
     async def stream_confirm(
-        self, operation_id: str, approve: bool, model: str | None
+        self,
+        operation_id: str,
+        approve: bool,
+        model: str | None,
+        user_id: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        operation = self.store.get_operation(operation_id)
+        operation = self.store.get_operation(operation_id, user_id=user_id)
         if operation is None:
             yield {"type": "error", "message": "La operación no existe."}
             return
 
         session_id = operation.get("session_id")
-        result, _ = await self.executor.execute_pending(operation_id, approve)
+        result, _ = await self.executor.execute_pending(
+            operation_id, approve, user_id=user_id
+        )
         yield {
             "type": "tool_result",
             "tool": operation["tool"],
@@ -119,7 +131,7 @@ class ChatService:
         messages = operation.get("messages")
         if not messages:
             messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-            for item in self.store.get_messages(session_id):
+            for item in self.store.get_messages(session_id, user_id=user_id):
                 if item["role"] in {"user", "assistant"} and item["content"].strip():
                     messages.append({"role": item["role"], "content": item["content"]})
 
@@ -131,7 +143,9 @@ class ChatService:
             }
         )
         if approve:
-            resolved_model = model or (self.store.get_session(session_id) or {}).get("model")
+            resolved_model = model or (
+                self.store.get_session(session_id, user_id=user_id) or {}
+            ).get("model")
             self.store.touch_session(session_id, resolved_model)
         else:
             self.store.add_message(
@@ -146,7 +160,7 @@ class ChatService:
             yield {"type": "done"}
             return
 
-        async for event in self._loop(session_id, model, messages):
+        async for event in self._loop(session_id, model, messages, user_id=user_id):
             yield event
 
     async def _loop(
@@ -154,6 +168,7 @@ class ChatService:
         session_id: str,
         model: str | None,
         messages: list[dict[str, Any]],
+        user_id: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         tools = self.registry.ollama_tools()
         for _step in range(self.max_steps):
@@ -164,7 +179,13 @@ class ChatService:
             content_parts: list[str] = []
             tool_calls: list[dict[str, Any]] = []
             try:
-                async for chunk in self.ollama.chat_stream(model, messages, tools):
+                if user_id is None:
+                    stream = self.ollama.chat_stream(model, messages, tools)
+                else:
+                    stream = self.ollama.chat_stream(
+                        model, messages, tools, user_id=user_id
+                    )
+                async for chunk in stream:
                     if session_id in self._cancelled:
                         yield {"type": "stopped", "message": "Generación detenida por el usuario."}
                         return
@@ -203,7 +224,7 @@ class ChatService:
                 yield {"type": "tool_start", "tool": name, "args": args}
 
                 result = await self.executor.execute(
-                    name, args, session_id=session_id
+                    name, args, session_id=session_id, user_id=user_id
                 )
                 yield {"type": "tool_result", "tool": name, "result": result}
                 self.store.add_message(

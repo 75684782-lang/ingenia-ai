@@ -6,13 +6,17 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .api import routes_chat, routes_system, routes_tools, ws
+from .agents import AgentManager
+from .api import routes_agents, routes_auth, routes_chat, routes_system, routes_tools, ws
+from .connectors.agent_civil3d import AgentCivil3DConnector
 from .connectors.civil3d_client import Civil3DClient
 from .core.config import Settings, get_settings
 from .core.logging import configure_logging, get_logger
 from .services.chat_service import ChatService
 from .services.ollama_client import OllamaClient
 from .services.operation_store import OperationStore
+from .services.remote_ollama import RemoteOllamaClient
+from .security.auth import RateLimiter
 from .tools.executor import ToolExecutor
 from .tools.registry import ToolRegistry
 
@@ -21,11 +25,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     configure_logging()
     log = get_logger("app")
     settings = settings or get_settings()
+    if settings.allow_remote and settings.accounts_enabled and not settings.use_agents:
+        raise ValueError(
+            "Los despliegues con cuentas requieren INGENIA_USE_AGENTS=true."
+        )
+    if settings.allow_remote and settings.accounts_enabled and not settings.cookie_secure:
+        raise ValueError(
+            "Las cuentas remotas requieren INGENIA_COOKIE_SECURE=true."
+        )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         log.info("Ingenia AI iniciado en http://%s:%s", settings.host, settings.port)
         yield
+        await app.state.agent_manager.close_all()
         app.state.store.close()
 
     app = FastAPI(
@@ -37,13 +50,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     store = OperationStore(settings.db_path)
-    ollama = OllamaClient(settings.ollama_url, timeout=settings.ollama_timeout)
-    connector = Civil3DClient(
-        settings.civil3d_bridge_url,
-        token=settings.civil3d_token,
-        timeout=settings.civil3d_timeout,
-        fallback_to_mock=settings.civil3d_fallback_to_mock,
-    )
+    agent_manager = AgentManager()
+    if settings.accounts_enabled and settings.use_agents:
+        ollama = RemoteOllamaClient(agent_manager)
+        connector = AgentCivil3DConnector(agent_manager)
+    else:
+        ollama = OllamaClient(settings.ollama_url, timeout=settings.ollama_timeout)
+        connector = Civil3DClient(
+            settings.civil3d_bridge_url,
+            token=settings.civil3d_token,
+            timeout=settings.civil3d_timeout,
+            fallback_to_mock=settings.civil3d_fallback_to_mock,
+        )
     registry = ToolRegistry()
     executor = ToolExecutor(registry, connector, store)
     chat = ChatService(
@@ -57,6 +75,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.state.settings = settings
     app.state.store = store
+    app.state.agent_manager = agent_manager
+    app.state.registration_limiter = RateLimiter(5)
+    app.state.login_limiter = RateLimiter(10)
+    app.state.pair_limiter = RateLimiter(10)
     app.state.ollama = ollama
     app.state.connector = connector
     app.state.registry = registry
@@ -64,10 +86,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.chat = chat
 
     app.include_router(routes_system.public_router)
+    app.include_router(routes_auth.router)
+    app.include_router(routes_agents.router)
     app.include_router(routes_system.router)
     app.include_router(routes_tools.router)
     app.include_router(routes_chat.router)
     app.include_router(ws.router)
+    app.include_router(routes_agents.websocket_router)
 
     frontend = settings.frontend_dir
     assets = frontend / "assets"
@@ -83,7 +108,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 status_code=500,
             )
         response = FileResponse(index_file)
-        if settings.auth_token:
+        if settings.auth_token and not settings.accounts_enabled:
             response.set_cookie(
                 "ingenia_token",
                 settings.auth_token,

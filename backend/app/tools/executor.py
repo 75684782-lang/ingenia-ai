@@ -12,9 +12,19 @@ from .registry import ToolRegistry, ToolSpec, ToolValidationError
 log = get_logger("tools.executor")
 
 
-def _idempotency_key(session_id: str | None, tool: str, args: dict[str, Any]) -> str:
+def _idempotency_key(
+    session_id: str | None,
+    tool: str,
+    args: dict[str, Any],
+    user_id: str | None = None,
+) -> str:
     raw = json.dumps(
-        {"session": session_id or "", "tool": tool, "args": args},
+        {
+            "user": user_id or "",
+            "session": session_id or "",
+            "tool": tool,
+            "args": args,
+        },
         sort_keys=True,
         ensure_ascii=False,
     )
@@ -45,6 +55,7 @@ class ToolExecutor:
         session_id: str | None = None,
         confirm: bool = False,
         idempotency_key: str | None = None,
+        user_id: str | None = None,
     ) -> dict[str, Any]:
         try:
             spec, clean_args = self.registry.validate(name, args)
@@ -57,13 +68,25 @@ class ToolExecutor:
                 status="validation_error",
                 session_id=session_id,
                 error=result["error"],
+                user_id=user_id,
             )
             result["operation_id"] = op_id
             return result
 
-        key = idempotency_key or _idempotency_key(session_id, name, clean_args)
-        existing = self.store.find_by_idempotency(key)
+        key = (
+            hashlib.sha256(f"{user_id or ''}:{idempotency_key}".encode()).hexdigest()
+            if idempotency_key
+            else _idempotency_key(session_id, name, clean_args, user_id)
+        )
+        existing = self.store.find_by_idempotency(key, user_id=user_id)
         if existing and existing["status"] in {"completed", "failed", "rejected"}:
+            return self._view(existing)
+        if existing and existing["status"] == "pending_confirmation":
+            if confirm:
+                result, _ = await self.execute_pending(
+                    existing["id"], True, user_id=user_id
+                )
+                return result
             return self._view(existing)
 
         if spec.requires_confirmation and not confirm:
@@ -97,12 +120,16 @@ class ToolExecutor:
             session_id=session_id,
             operation_id=None,
             idempotency_key=key,
+            user_id=user_id,
         )
 
     async def execute_pending(
-        self, operation_id: str, approve: bool
+        self,
+        operation_id: str,
+        approve: bool,
+        user_id: str | None = None,
     ) -> tuple[dict[str, Any], dict[str, Any] | None]:
-        operation = self.store.get_operation(operation_id)
+        operation = self.store.get_operation(operation_id, user_id=user_id)
         if operation is None:
             return (
                 {
@@ -155,6 +182,7 @@ class ToolExecutor:
             session_id=operation["session_id"],
             operation_id=operation_id,
             idempotency_key=None,
+            user_id=user_id,
         )
         return result, operation
 
@@ -166,6 +194,7 @@ class ToolExecutor:
         session_id: str | None,
         operation_id: str | None,
         idempotency_key: str | None,
+        user_id: str | None = None,
     ) -> dict[str, Any]:
         if operation_id is None:
             operation_id = self.store.create_operation(
@@ -175,15 +204,21 @@ class ToolExecutor:
                 status="running",
                 session_id=session_id,
                 idempotency_key=idempotency_key,
+                user_id=user_id,
             )
         else:
             self.store.update_operation(operation_id, status="running")
 
         if spec.local:
-            result = self._run_local(spec, args)
+            result = self._run_local(spec, args, user_id=user_id)
         else:
             try:
-                result = await self.connector.call(spec.name, args, operation_id)
+                if user_id is None:
+                    result = await self.connector.call(spec.name, args, operation_id)
+                else:
+                    result = await self.connector.call(
+                        spec.name, args, operation_id, user_id=user_id
+                    )
             except ConnectorError as exc:
                 result = {
                     "ok": False,
@@ -214,9 +249,11 @@ class ToolExecutor:
         view = self.store.get_operation(operation_id) or {}
         return self._view(view)
 
-    def _run_local(self, spec: ToolSpec, args: dict[str, Any]) -> dict[str, Any]:
+    def _run_local(
+        self, spec: ToolSpec, args: dict[str, Any], user_id: str | None = None
+    ) -> dict[str, Any]:
         if spec.name == "get_operation_status":
-            operation = self.store.get_operation(args["operation_id"])
+            operation = self.store.get_operation(args["operation_id"], user_id=user_id)
             if operation is None:
                 return {
                     "ok": False,

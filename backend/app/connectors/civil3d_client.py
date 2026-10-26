@@ -42,7 +42,7 @@ class Civil3DClient:
             headers["X-Ingenia-Token"] = self._token
         return headers
 
-    async def status(self) -> dict[str, Any]:
+    async def status(self, user_id: str | None = None) -> dict[str, Any]:
         try:
             async with httpx.AsyncClient(
                 timeout=httpx.Timeout(3.0, connect=2.0),
@@ -64,7 +64,8 @@ class Civil3DClient:
             return mock_status
 
     async def call(
-        self, tool: str, args: dict[str, Any], request_id: str
+        self, tool: str, args: dict[str, Any], request_id: str,
+        user_id: str | None = None,
     ) -> dict[str, Any]:
         payload = {"tool": tool, "args": args, "request_id": request_id}
         try:
@@ -99,3 +100,4 @@ class Civil3DClient:
         data.setdefault("mode", "real")
         data.setdefault("ok", False)
         return data
+

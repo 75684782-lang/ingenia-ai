@@ -2,47 +2,46 @@
 
 ## Regla de oro
 
-**La IA y el control de Civil 3D viven en el equipo del usuario; el hosting solo distribuye.**
+**La web coordina; la IA y Civil 3D permanecen en el equipo de cada usuario.**
 
-Ingenia AI no incluye ni aloja ningún modelo. Cada usuario instala Ollama, descarga el modelo
-que prefiera y lo usa desde la aplicación local. Publicar la app en un servidor no permite que
-ese servidor use el Ollama ni el Civil 3D de otra persona.
+El usuario abre la web, inicia sesión y empareja un conector local. Este inicia una conexión
+saliente cifrada a la web y retransmite únicamente métodos permitidos a Ollama y al puente de
+Civil 3D en `127.0.0.1`. El backend no se conecta directamente al PC ni recibe archivos DWG.
+Los prompts, el historial y los metadatos/resultados de herramientas sí pasan por el backend y
+se almacenan en su base de datos; informa esta política y define su retención antes de aceptar
+datos sensibles.
 
-## Por qué el backend no puede ir al hosting
+El backend ya contiene el flujo de cuentas, emparejamiento y enrutamiento del agente. La
+instancia desplegada en Render **continúa en modo demo** hasta activar las cuentas y configurar
+almacenamiento persistente; su SQLite actual está en `/tmp`.
+
+## Límites de red y datos
 
 | Recurso | Dónde vive | Un servidor remoto puede alcanzarlo |
 | --- | --- | --- |
-| Ollama (`127.0.0.1:11434`) | PC del usuario | No |
-| Puente Civil 3D (`127.0.0.1:8756`) | PC del usuario, dentro de AutoCAD | No |
+| Ollama (`127.0.0.1:11434`) | PC del usuario | Solo a través del conector autenticado |
+| Puente Civil 3D (`127.0.0.1:8756`) | PC del usuario, dentro de AutoCAD | Solo a través del conector autenticado |
 | Archivos `.dwg` y licencia Civil 3D | PC del usuario | No |
 
-Además:
-
-- El guard de seguridad solo acepta peticiones loopback; publicado dejaría de funcionar.
-- Exponer el puente de Civil 3D a internet permitiría ejecutar comandos sobre dibujos ajenos.
-  Está prohibido por diseño.
-- Un Ollama en el servidor necesitaría CPU/GPU y RAM, y seguiría sin poder tocar Civil 3D.
-
-## Arquitectura recomendada (web sin IA)
+## Arquitectura web con conector local
 
 ```
 Usuario
-  ├─ Navegador -> http://127.0.0.1:8000  (frontend + backend locales)
+  ├─ Navegador -> https://ingenia-ai.onrender.com (web y API)
+  ├─ Conector local -> WSS saliente autenticado y emparejado por cuenta
   ├─ Ollama local (modelos descargados por el usuario)
   └─ Civil 3D + plugin C# (127.0.0.1:8756)
 
-Internet
-  └─ Web de descarga/instrucciones (estática) + Releases con el instalador
+Render
+  ├─ API, cuentas, sesiones y coordinación
+  └─ Sin conexiones entrantes al PC ni acceso directo a sus programas
 ```
 
-1. La web publicada es una **landing de descarga** (HTML estático) con instrucciones.
-2. El instalador se distribuye por GitHub Releases o un bucket (R2/S3).
-3. Al abrir la app, corre en `http://127.0.0.1:8000`; el usuario elige o descarga modelos desde
-   el panel **Modelos**.
-4. El plugin de Civil 3D se instala con el bundle y se arranca dentro de AutoCAD.
-
-Ventajas: sin coste de GPU, sin datos de dibujos en la nube, sin latencia de red y sin exponer
-el puente.
+El emparejamiento usa un código temporal de un solo uso. El servidor almacena el hash de la
+credencial permanente del conector; el conector guarda la credencial en el perfil local de
+Windows. Cada cuenta solo puede enviar órdenes al dispositivo que esa misma cuenta emparejó.
+Los métodos se limitan a las operaciones listadas por el backend y el conector; no se permiten
+comandos ni código arbitrario.
 
 ## Dónde alojar cada pieza
 
@@ -51,39 +50,39 @@ el puente.
 | Landing estática | Cloudflare Pages | Netlify, Vercel, GitHub Pages | Gratis |
 | Instalador / releases | GitHub Releases | Cloudflare R2 + dominio, S3 | Gratis o centavos |
 | Documentación | GitHub Pages o el mismo hosting estático | MkDocs en Cloudflare Pages | Gratis |
-| Backend futuro con login | VPS (Hetzner, DigitalOcean) | Fly.io, Railway | 5–20 USD/mes |
+| Backend y WebSocket | Render con almacenamiento persistente | VPS, Fly.io, Railway | Según proveedor |
+| Base de datos de cuentas y dispositivos | PostgreSQL gestionado o almacenamiento persistente | SQLite en disco persistente para una sola instancia | Según proveedor |
 | Ollama | **Siempre en el PC del usuario** | Servidor con GPU solo si se asume el coste | — |
 
 No uses planes gratuitos tipo Render/Railway para Ollama: se duermen, tienen poca RAM y no
 sirven para inferencia estable.
 
-## Publicar la landing
+## Preparar la instancia web para cuentas
 
-1. Crea una carpeta `site/` con un `index.html` que explique requisitos (Windows, Civil 3D,
-   Ollama) y enlace al instalador.
-2. Súbela a Cloudflare Pages o Netlify (arrastrar y soltar o conectar el repositorio).
-3. Publica el instalador en GitHub Releases y enlaza la última versión.
-4. Añade HTTPS; nunca pidas credenciales en una página sin TLS.
+No habilites cuentas en Render mientras `DATABASE_PATH` apunte a `/tmp`: ese directorio es
+efímero y perder una sesión o una credencial de dispositivo dejaría al usuario sin acceso. El
+servicio también debe mantener una instancia única o usar infraestructura compartida para
+WebSockets y límites de solicitudes.
 
-## Empaquetar la app para usuarios
+Cuando el almacenamiento persistente esté listo, configura:
 
-Opciones, de menor a mayor comodidad:
+```text
+INGENIA_ALLOW_REMOTE=true
+INGENIA_COOKIE_SECURE=true
+INGENIA_ACCOUNTS=true
+INGENIA_USE_AGENTS=true
+DATABASE_PATH=<ruta persistente>
+```
 
-1. **ZIP + `scripts/start.bat`**: requiere Python 3.12 instalado. Es lo que existe hoy.
-2. **PyInstaller**: genera un `.exe` del backend; el frontend y los assets se incluyen como
-   datos. No requiere Python en el equipo destino.
-3. **Inno Setup**: instalador con accesos directos, detección de Ollama y del bundle de Civil 3D.
-   Recomendado para usuarios no técnicos.
-4. **Autoinstalación del plugin**: copiar el `.bundle` a
-   `%APPDATA%\Autodesk\ApplicationPlugins\` y avisar de reiniciar AutoCAD.
+El backend actual soporta SQLite; una base externa como PostgreSQL requiere adaptar la capa de
+persistencia antes de usarla. Usa HTTPS, conserva secretos fuera del repositorio y configura
+un respaldo de la base de datos.
 
-El plugin sigue compilándose aparte porque necesita los ensamblados de Autodesk; no lo incluyas
-en el instalador si no está firmado o verificado.
-
-## Demo gratuita en Render (para probar la interfaz)
+## Demo actual en Render
 
 El repositorio incluye `render.yaml` y `Dockerfile`. La demo sirve para validar UI, API, historial,
-seguridad y mensajes de error; **no habrá modelos ni Civil 3D reales**.
+seguridad y mensajes de error. Las cuentas y el emparejamiento no están activados en esta
+instancia; **no conectes dispositivos ni uses dibujos reales**.
 
 1. Sube el proyecto a GitHub.
 2. En Render: **New → Blueprint** → elige el repositorio. Detecta `render.yaml`.
@@ -98,12 +97,9 @@ Comportamiento esperado en la demo:
 - `Civil 3D` aparecerá como `connected=false` y `mode=mock`; las operaciones nunca fingirán éxito.
 - La base SQLite vive en `/tmp` y se pierde al reiniciar el servicio (plan gratuito).
 
-### Probar con Ollama propio (opcional)
-
-Si necesitas probar el chat desde la demo alojada, expón tu Ollama con un túnel (por ejemplo
-Cloudflare Tunnel) y define `OLLAMA_URL` en el hosting. Ten en cuenta que estarás publicando tu
-Ollama: protégelo, no lo dejes abierto y ciérralo al terminar. Para uso real, es mejor ejecutar
-Ingenia AI en local.
+Para probar el chat web con Ollama local, habilita el modo de cuentas solo después de configurar
+persistencia y ejecuta el [conector local](../connectors/desktop/README.md). No uses túneles
+para publicar Ollama o Civil 3D.
 
 ### Docker en cualquier proveedor
 
@@ -124,24 +120,12 @@ Con HTTPS cambia `INGENIA_COOKIE_SECURE=true`. No publiques los puertos `8756` n
 - Texto exacto del error y navegador usado.
 - Si el problema es visual, captura; si es de API, la respuesta de `/api/health` y `/api/ollama/status`.
 
-## Alternativa híbrida (solo si más adelante hace falta)
-
-Si en el futuro quieres una web central con cuentas y operar Civil 3D desde cualquier sitio:
-
-- Backend alojado con autenticación real por usuario (no un token compartido).
-- Un **agente local** en cada PC que abra una conexión saliente (WebSocket/TLS) hacia el
-  hosting; el servidor nunca inicia conexiones al puente local.
-- Cola de trabajos, auditoría por usuario y límites de uso.
-- Aun así, Ollama puede quedarse en el equipo del usuario o en el servidor, pero no ambos sin
-  definir el coste.
-
-Esto **no está implementado** y es un cambio de arquitectura grande, no un despliegue.
-
 ## Lista de verificación antes de publicar
 
 - [ ] La landing no incluye claves, tokens ni el `.env`.
-- [ ] `backend/.env` y `backend/data/` están fuera del repositorio.
+- [ ] `backend/.env` y la base de datos persistente están fuera del repositorio.
 - [ ] El instalador se publica con hash SHA-256 y, si es posible, firma de código.
 - [ ] Los puertos `8000`, `8756` y `11434` no se abren al exterior.
 - [ ] El token local se genera por instalación (no reutilizar `ingenia-local-dev`).
-- [ ] Se documenta que el modelo se descarga en el equipo del usuario.
+- [ ] Cuentas y dispositivos usan almacenamiento persistente y sesiones por usuario.
+- [ ] Se documenta que el modelo se descarga y ejecuta en el equipo del usuario.

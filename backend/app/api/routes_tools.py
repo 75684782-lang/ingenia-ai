@@ -3,13 +3,13 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Request
 
 from ..models.schemas import ToolExecuteRequest
-from ..security.auth import require_local
+from ..security.auth import require_access
 
 router = APIRouter(prefix="/api/tools", tags=["tools"])
 
 
 @router.get("")
-async def list_tools(request: Request, _: None = Depends(require_local)) -> dict:
+async def list_tools(request: Request, _: None = Depends(require_access)) -> dict:
     return {"tools": request.app.state.registry.describe()}
 
 
@@ -18,12 +18,13 @@ async def execute_tool(
     tool_name: str,
     payload: ToolExecuteRequest,
     request: Request,
-    _: None = Depends(require_local),
+    user: dict | None = Depends(require_access),
 ) -> dict:
     result = await request.app.state.executor.execute(
         tool_name,
         payload.args,
         confirm=payload.confirm,
         idempotency_key=payload.idempotency_key,
+        user_id=user["id"] if user else None,
     )
     return result

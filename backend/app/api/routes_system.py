@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from ..models.schemas import PullModelRequest
-from ..security.auth import require_local
+from ..security.auth import require_access
 from ..services.ollama_client import is_valid_model_name
 
 router = APIRouter(prefix="/api", tags=["system"])
@@ -30,26 +30,39 @@ async def health(request: Request) -> dict:
 
 
 @router.get("/config")
-async def config(request: Request, _: None = Depends(require_local)) -> dict:
+async def config(request: Request, _: None = Depends(require_access)) -> dict:
     settings = request.app.state.settings
     return {
         "app": settings.app_name,
         "default_model": settings.ollama_model,
         "auth_required": bool(settings.auth_token),
+        "accounts_enabled": settings.accounts_enabled,
+        "agents_enabled": settings.use_agents,
         "civil3d_fallback_to_mock": settings.civil3d_fallback_to_mock,
     }
 
 
 @router.get("/ollama/status")
-async def ollama_status(request: Request, _: None = Depends(require_local)) -> dict:
-    available = await request.app.state.ollama.is_available()
-    return {"available": available, "url": request.app.state.settings.ollama_url}
+async def ollama_status(
+    request: Request, user: dict | None = Depends(require_access)
+) -> dict:
+    ollama = request.app.state.ollama
+    if user:
+        available = await ollama.is_available(user_id=user["id"])
+    else:
+        available = await ollama.is_available()
+    return {"available": available}
 
 
 @router.get("/ollama/models")
-async def ollama_models(request: Request, _: None = Depends(require_local)) -> dict:
+async def ollama_models(
+    request: Request, user: dict | None = Depends(require_access)
+) -> dict:
     try:
-        models = await request.app.state.ollama.list_models()
+        if user:
+            models = await request.app.state.ollama.list_models(user_id=user["id"])
+        else:
+            models = await request.app.state.ollama.list_models()
         return {"available": True, "models": models, "error": None}
     except Exception as exc:  # noqa: BLE001
         return {"available": False, "models": [], "error": str(exc)}
@@ -59,7 +72,7 @@ async def ollama_models(request: Request, _: None = Depends(require_local)) -> d
 async def pull_model(
     payload: PullModelRequest,
     request: Request,
-    _: None = Depends(require_local),
+    user: dict | None = Depends(require_access),
 ) -> StreamingResponse:
     model = payload.model.strip()
     if not is_valid_model_name(model):
@@ -73,7 +86,11 @@ async def pull_model(
     async def generator():
         yield _sse({"type": "start", "model": model})
         try:
-            async for chunk in ollama.pull_model_stream(model):
+            if user:
+                stream = ollama.pull_model_stream(model, user_id=user["id"])
+            else:
+                stream = ollama.pull_model_stream(model)
+            async for chunk in stream:
                 status = chunk.get("status", "")
                 total = chunk.get("total") or 0
                 completed = chunk.get("completed") or 0
@@ -106,22 +123,42 @@ async def pull_model(
 
 
 @router.get("/civil3d/status")
-async def civil3d_status(request: Request, _: None = Depends(require_local)) -> dict:
+async def civil3d_status(
+    request: Request, user: dict | None = Depends(require_access)
+) -> dict:
+    if user:
+        return await request.app.state.connector.status(user_id=user["id"])
     return await request.app.state.connector.status()
 
 
 @router.get("/sessions")
-async def list_sessions(request: Request, limit: int = 50, _: None = Depends(require_local)) -> dict:
-    return {"sessions": request.app.state.store.list_sessions(limit=limit)}
+async def list_sessions(
+    request: Request,
+    limit: int = 50,
+    user: dict | None = Depends(require_access),
+) -> dict:
+    return {
+        "sessions": request.app.state.store.list_sessions(
+            limit=limit, user_id=user["id"] if user else None
+        )
+    }
 
 
 @router.get("/sessions/{session_id}/messages")
 async def session_messages(
-    session_id: str, request: Request, _: None = Depends(require_local)
+    session_id: str,
+    request: Request,
+    user: dict | None = Depends(require_access),
 ) -> dict:
+    user_id = user["id"] if user else None
+    session = request.app.state.store.get_session(session_id, user_id=user_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Conversación no encontrada.")
     return {
-        "session": request.app.state.store.get_session(session_id),
-        "messages": request.app.state.store.get_messages(session_id),
+        "session": session,
+        "messages": request.app.state.store.get_messages(
+            session_id, user_id=user_id
+        ),
     }
 
 
@@ -130,20 +167,26 @@ async def list_operations(
     request: Request,
     session_id: str | None = None,
     limit: int = 30,
-    _: None = Depends(require_local),
+    user: dict | None = Depends(require_access),
 ) -> dict:
     return {
         "operations": request.app.state.store.list_operations(
-            session_id=session_id, limit=limit
+            session_id=session_id,
+            limit=limit,
+            user_id=user["id"] if user else None,
         )
     }
 
 
 @router.get("/operations/{operation_id}")
 async def get_operation(
-    operation_id: str, request: Request, _: None = Depends(require_local)
+    operation_id: str,
+    request: Request,
+    user: dict | None = Depends(require_access),
 ) -> dict:
-    operation = request.app.state.store.get_operation(operation_id)
+    operation = request.app.state.store.get_operation(
+        operation_id, user_id=user["id"] if user else None
+    )
     if operation is None:
         return {"found": False, "operation": None}
     return {"found": True, "operation": operation}

@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="/assets/css/styles.css" />
 </head>
 <body>
-  <div class="app-shell">
+  <div class="app-shell" id="app-shell">
     <aside class="sidebar" id="sidebar">
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">IA</div>
@@ -59,6 +59,10 @@
           <span class="pill" id="pill-ollama"><span class="dot"></span> Ollama</span>
           <span class="pill" id="pill-civil"><span class="dot"></span> Civil 3D</span>
         </div>
+        <div class="account-controls" id="account-controls" hidden>
+          <span id="account-name"></span>
+          <button class="btn btn-ghost" id="logout-btn">Salir</button>
+        </div>
         <button class="btn btn-ghost guide-btn" id="open-guide" title="Guía de uso">? Guía</button>
         <button class="icon-btn" id="toggle-panel" aria-label="Panel de estado">▤</button>
       </header>
@@ -67,7 +71,7 @@
         <div class="chat" id="chat">
           <div class="welcome" id="welcome">
             <div class="welcome-mark">IA</div>
-            <h2>Asistente de ingeniería local</h2>
+            <h2>Asistente de ingeniería</h2>
             <p>Consulto el dibujo abierto y ejecuto operaciones reales en Civil 3D. Todo el procesamiento de IA ocurre en tu equipo mediante Ollama.</p>
             <div class="suggestions">
               <button class="suggestion">Analiza el dibujo abierto y dime qué objetos contiene</button>
@@ -111,6 +115,20 @@
           <div class="kv"><span>Modo</span><strong id="p-mode">—</strong></div>
         </section>
 
+        <section class="card" id="card-connect" hidden>
+          <div class="card-head"><h3>Mi PC</h3><span class="tag">conector</span></div>
+          <p class="hint">Vincula tu PC para usar Ollama y Civil 3D desde esta web. El conector inicia una conexión cifrada saliente; no abras puertos del equipo.</p>
+          <button class="btn btn-primary btn-block" id="pair-btn">Vincular esta PC</button>
+          <div class="pair-code-box" id="pair-code-box" hidden>
+            <div class="pair-code" id="pair-code"></div>
+            <p class="hint" id="pair-expiry"></p>
+            <p class="hint">Descarga el <a href="https://github.com/75684782-lang/ingenia-ai/archive/refs/heads/main.zip" target="_blank" rel="noopener">ZIP del conector</a>, instálalo y escribe este código cuando lo solicite:</p>
+            <code class="connector-command">py -3.12 -m pip install -r connectors\desktop\requirements.txt</code>
+            <code class="connector-command">py -3.12 connectors\desktop\agent.py --url https://ingenia-ai.onrender.com</code>
+          </div>
+          <div class="agent-list" id="agent-list"><p class="empty-hint">Aún no hay PCs vinculadas.</p></div>
+        </section>
+
         <section class="card" id="card-models">
           <div class="card-head"><h3>Modelo de IA</h3><span class="tag">Ollama</span></div>
           <label class="field">
@@ -137,7 +155,7 @@
         </section>
 
         <section class="card" id="card-config">
-          <div class="card-head"><h3>Configuración</h3><span class="tag">local</span></div>
+          <div class="card-head"><h3>Configuración</h3><span class="tag" id="cfg-location">local</span></div>
           <div class="kv"><span>API</span><strong id="cfg-api">—</strong></div>
           <div class="kv"><span>Modelo por defecto</span><strong id="cfg-model">—</strong></div>
           <div class="kv"><span>Fallback simulado</span><strong id="cfg-fallback">—</strong></div>
@@ -146,6 +164,35 @@
       </div>
     </aside>
   </div>
+
+  <main class="auth-screen" id="auth-screen" hidden>
+    <section class="auth-card">
+      <div class="brand-mark" aria-hidden="true">IA</div>
+      <h1>Ingenia AI</h1>
+      <p>Inicia sesión para conectar esta web con tu PC y tus programas de ingeniería.</p>
+      <div class="auth-tabs" role="tablist">
+        <button class="btn" id="auth-login-tab" type="button" aria-selected="true">Iniciar sesión</button>
+        <button class="btn btn-ghost" id="auth-register-tab" type="button" aria-selected="false">Crear cuenta</button>
+      </div>
+      <form id="auth-form">
+        <label class="field" id="auth-name-field" hidden>
+          <span>Nombre</span>
+          <input id="auth-name" type="text" maxlength="120" autocomplete="name" />
+        </label>
+        <label class="field">
+          <span>Correo electrónico</span>
+          <input id="auth-email" type="email" maxlength="200" autocomplete="email" required />
+        </label>
+        <label class="field">
+          <span>Contraseña</span>
+          <input id="auth-password" type="password" minlength="8" maxlength="200" autocomplete="current-password" required />
+        </label>
+        <p class="auth-error" id="auth-error" role="alert"></p>
+        <button class="btn btn-primary btn-block" id="auth-submit" type="submit">Iniciar sesión</button>
+      </form>
+      <p class="hint">Tus consultas de IA se procesan con Ollama en tu PC. No envíes credenciales del programa CAD.</p>
+    </section>
+  </main>
 
   <div class="modal-backdrop" id="guide-modal" hidden>
     <section class="modal" role="dialog" aria-modal="true" aria-labelledby="guide-title">
@@ -163,8 +210,9 @@
         </div>
         <p class="guide-intro">
           Ingenia AI es un asistente <strong>local</strong>: la inteligencia artificial corre en tu
-          equipo mediante Ollama y el control de Civil 3D ocurre dentro de AutoCAD. Tus dibujos no se
-          envían a ningún servidor.
+          equipo mediante Ollama y el control de Civil 3D ocurre dentro de AutoCAD. Los archivos DWG
+          no se suben, pero el chat, el historial y los datos devueltos por las herramientas pasan
+          por el servidor web y pueden quedar guardados allí.
         </p>
         <ol class="guide-steps">
           <li>
