@@ -6,12 +6,12 @@ local mantiene una conexión cifrada saliente y solo retransmite los métodos au
 
 > Estado honesto: la parte de IA/backend/frontend está implementada y probada. El
 > complemento de Civil 3D está implementado pero **no ha sido compilado ni probado** en
-> este equipo porque Civil 3D no está instalado. Mientras no haya conexión real, todas las
-> operaciones devuelven `mode="mock"` y `ok=false`; nunca se simula un éxito.
+> este equipo porque Civil 3D no está instalado. Sin una conexión real, las operaciones fallan
+> explícitamente; nunca se simula un éxito.
 >
-> El backend incluye cuentas y emparejamiento por código para conectar PCs desde la web.
-> La instancia actual de Render sigue en modo demo hasta configurar almacenamiento
-> persistente; no habilites cuentas sobre la base efímera `/tmp`.
+> Render está configurado para cuentas, emparejamiento y SQLite en un disco persistente.
+> El despliegue requiere sincronizar el Blueprint y aceptar el plan pagado con su disco.
+> El complemento de Civil 3D todavía necesita compilarse y probarse en una PC con Civil 3D.
 >
 > En el modo web, los archivos DWG permanecen en el PC, pero los mensajes, el historial y
 > los resultados de herramientas atraviesan y se guardan en el servidor. No introduzcas

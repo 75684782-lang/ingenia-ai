@@ -46,7 +46,7 @@ de archivos ni código arbitrario enviados por la web.
 
 ## Estado de despliegue
 
-Las funciones de cuentas y conectores requieren `INGENIA_ACCOUNTS=true` y
-`INGENIA_USE_AGENTS=true` en el servidor, además de una base de datos persistente. La demo
-Render actual almacena SQLite en `/tmp` y no activa cuentas; no la uses aún para vincular
-dispositivos hasta configurar almacenamiento persistente.
+El servicio de Render está configurado con cuentas y conectores activados y SQLite persistente.
+Si el emparejamiento falla, comprueba que el despliegue del Blueprint finalizó y que
+`/api/auth/mode` responde con `"accounts":true`. No intentes vincular el conector si el servidor
+indica que las cuentas o los agentes están deshabilitados.

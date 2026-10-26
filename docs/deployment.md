@@ -12,8 +12,8 @@ se almacenan en su base de datos; informa esta política y define su retención 
 datos sensibles.
 
 El backend ya contiene el flujo de cuentas, emparejamiento y enrutamiento del agente. La
-instancia desplegada en Render **continúa en modo demo** hasta activar las cuentas y configurar
-almacenamiento persistente; su SQLite actual está en `/tmp`.
+instancia de Render usa cuentas, conectores locales y SQLite en un disco persistente. El servicio
+está configurado para una sola instancia porque el disco no se comparte entre instancias.
 
 ## Límites de red y datos
 
@@ -57,49 +57,45 @@ comandos ni código arbitrario.
 No uses planes gratuitos tipo Render/Railway para Ollama: se duermen, tienen poca RAM y no
 sirven para inferencia estable.
 
-## Preparar la instancia web para cuentas
+## Producción en Render
 
-No habilites cuentas en Render mientras `DATABASE_PATH` apunte a `/tmp`: ese directorio es
-efímero y perder una sesión o una credencial de dispositivo dejaría al usuario sin acceso. El
-servicio también debe mantener una instancia única o usar infraestructura compartida para
-WebSockets y límites de solicitudes.
-
-Cuando el almacenamiento persistente esté listo, configura:
+`render.yaml` configura el servicio con plan Starter, un disco persistente de 1 GB en `/var/data`
+y estas opciones:
 
 ```text
 INGENIA_ALLOW_REMOTE=true
 INGENIA_COOKIE_SECURE=true
 INGENIA_ACCOUNTS=true
 INGENIA_USE_AGENTS=true
-DATABASE_PATH=<ruta persistente>
+DATABASE_PATH=/var/data/ingenia.db
+CIVIL3D_FALLBACK_TO_MOCK=false
 ```
 
-El backend actual soporta SQLite; una base externa como PostgreSQL requiere adaptar la capa de
-persistencia antes de usarla. Usa HTTPS, conserva secretos fuera del repositorio y configura
-un respaldo de la base de datos.
+El servicio de pago y el disco pueden generar cargos mensuales; confirma el precio vigente en
+Render. El disco no permite escalar a varias instancias y desactiva los despliegues sin
+interrupción. Render crea snapshots diarios del disco y conserva los disponibles durante siete
+días; no sustituyen una política propia de respaldos. La base se crea vacía en `/var/data`; no se
+migran sesiones temporales que hubiera en `/tmp`.
 
-## Demo actual en Render
+El registro público está abierto. Cada usuario crea su cuenta, vincula su propio conector y puede
+revocarlo desde la web. No se suben dibujos DWG, pero prompts, historial y resultados de
+herramientas se guardan en la SQLite persistente. No uses datos sensibles hasta definir y publicar
+una política de privacidad y retención apropiada.
 
-El repositorio incluye `render.yaml` y `Dockerfile`. La demo sirve para validar UI, API, historial,
-seguridad y mensajes de error. Las cuentas y el emparejamiento no están activados en esta
-instancia; **no conectes dispositivos ni uses dibujos reales**.
+### Preparar una PC de usuario
 
-1. Sube el proyecto a GitHub.
-2. En Render: **New → Blueprint** → elige el repositorio. Detecta `render.yaml`.
-3. Espera el despliegue y abre la URL `https://<servicio>.onrender.com`.
-4. La cookie de acceso se instala al abrir `/`. Comparte la URL solo con quienes vayan a probar.
-5. Revisa los logs del servicio si algo falla.
+1. Abre la URL de Render y crea una cuenta.
+2. Sigue la guía de [instalación y conexión del conector local](../connectors/desktop/README.md).
+3. Instala Ollama y descarga el modelo indicado. El modelo corre en la PC, no en Render.
+4. Para operar Civil 3D, compila e instala el complemento siguiendo la
+   [guía de integración](./civil3d-integration.md); usa un dibujo de prueba y verifica el token.
+5. Abre **Mi PC**, genera un código temporal e ingrésalo en el conector.
+6. Comprueba que el estado del conector y Ollama aparece conectado antes de enviar una orden.
 
-Comportamiento esperado en la demo:
-
-- El panel **Modelos** mostrará que Ollama no está disponible y no listará modelos.
-- El chat responderá con un error claro de conexión con Ollama; no inventará respuestas.
-- `Civil 3D` aparecerá como `connected=false` y `mode=mock`; las operaciones nunca fingirán éxito.
-- La base SQLite vive en `/tmp` y se pierde al reiniciar el servicio (plan gratuito).
-
-Para probar el chat web con Ollama local, habilita el modo de cuentas solo después de configurar
-persistencia y ejecuta el [conector local](../connectors/desktop/README.md). No uses túneles
-para publicar Ollama o Civil 3D.
+Si el proyecto ya está enlazado a Render como Blueprint, sincroniza el Blueprint después de
+publicar cambios en `render.yaml` y acepta el cambio al plan pagado y la creación del disco. Antes
+de probar, confirma en el Dashboard que el disco está montado y que `DATABASE_PATH` apunta a
+`/var/data/ingenia.db`. Si no hay almacenamiento persistente, no habilites cuentas.
 
 ### Docker en cualquier proveedor
 
@@ -114,7 +110,7 @@ docker run -p 8000:8000 ^
 
 Con HTTPS cambia `INGENIA_COOKIE_SECURE=true`. No publiques los puertos `8756` ni `11434`.
 
-### Qué reportar tras probar la demo
+### Qué reportar si falla la conexión
 
 - Pantalla o endpoint donde falla y hora aproximada.
 - Texto exacto del error y navegador usado.
@@ -129,3 +125,4 @@ Con HTTPS cambia `INGENIA_COOKIE_SECURE=true`. No publiques los puertos `8756` n
 - [ ] El token local se genera por instalación (no reutilizar `ingenia-local-dev`).
 - [ ] Cuentas y dispositivos usan almacenamiento persistente y sesiones por usuario.
 - [ ] Se documenta que el modelo se descarga y ejecuta en el equipo del usuario.
+- [ ] Antes de usar datos reales, publicar política de privacidad, retención y eliminación de cuentas.
