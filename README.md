@@ -9,8 +9,9 @@ local mantiene una conexión cifrada saliente y solo retransmite los métodos au
 > este equipo porque Civil 3D no está instalado. Sin una conexión real, las operaciones fallan
 > explícitamente; nunca se simula un éxito.
 >
-> Render está configurado para cuentas, emparejamiento y SQLite en un disco persistente.
-> El despliegue requiere sincronizar el Blueprint y aceptar el plan pagado con su disco.
+> El repositorio ya incluye la configuración de Render para cuentas y disco persistente. El
+> servicio existente sigue en el plan gratuito hasta completar el cambio de facturación y disco
+> en el Dashboard; no habilites cuentas antes de aplicarlo.
 > El complemento de Civil 3D todavía necesita compilarse y probarse en una PC con Civil 3D.
 >
 > En el modo web, los archivos DWG permanecen en el PC, pero los mensajes, el historial y

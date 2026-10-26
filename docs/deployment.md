@@ -11,9 +11,9 @@ Los prompts, el historial y los metadatos/resultados de herramientas sí pasan p
 se almacenan en su base de datos; informa esta política y define su retención antes de aceptar
 datos sensibles.
 
-El backend ya contiene el flujo de cuentas, emparejamiento y enrutamiento del agente. La
-instancia de Render usa cuentas, conectores locales y SQLite en un disco persistente. El servicio
-está configurado para una sola instancia porque el disco no se comparte entre instancias.
+El backend ya contiene el flujo de cuentas, emparejamiento y enrutamiento del agente. El
+servicio existente de Render está conectado directamente a GitHub y continúa en el plan gratuito
+hasta que se complete el cambio de facturación y almacenamiento desde el Dashboard.
 
 ## Límites de red y datos
 
@@ -59,8 +59,8 @@ sirven para inferencia estable.
 
 ## Producción en Render
 
-`render.yaml` configura el servicio con plan Starter, un disco persistente de 1 GB en `/var/data`
-y estas opciones:
+`render.yaml` describe la configuración deseada para un servicio nuevo: plan Starter, disco
+persistente de 1 GB en `/var/data` y estas variables:
 
 ```text
 INGENIA_ALLOW_REMOTE=true
@@ -71,11 +71,23 @@ DATABASE_PATH=/var/data/ingenia.db
 CIVIL3D_FALLBACK_TO_MOCK=false
 ```
 
-El servicio de pago y el disco pueden generar cargos mensuales; confirma el precio vigente en
-Render. El disco no permite escalar a varias instancias y desactiva los despliegues sin
-interrupción. Render crea snapshots diarios del disco y conserva los disponibles durante siete
-días; no sustituyen una política propia de respaldos. La base se crea vacía en `/var/data`; no se
-migran sesiones temporales que hubiera en `/tmp`.
+El servicio actual (`ingenia-ai`) está conectado directamente a GitHub, no sincronizado como
+Blueprint. Sus despliegues de código son automáticos, pero los cambios en `render.yaml` no
+actualizan por sí solos la configuración de recursos de ese servicio. En el Dashboard:
+
+1. Cambia el plan de cómputo gratuito a Starter.
+2. Añade un disco persistente de 1 GB con punto de montaje `/var/data`.
+3. Configura las variables de entorno anteriores. Mantén las cuentas desactivadas hasta que
+   el disco esté montado y `DATABASE_PATH` apunte a `/var/data/ingenia.db`.
+4. Guarda los cambios y espera a que el despliegue quede Live. Verifica `/api/auth/mode` antes de
+   crear cuentas.
+
+El plan Starter figuraba en Render a $7/mes al preparar este cambio; el disco genera un costo
+adicional. Confirma los cargos actuales en el Dashboard antes de aceptar. El disco no permite
+escalar a varias instancias y desactiva los despliegues sin interrupción. Render crea snapshots
+diarios del disco y conserva los disponibles durante siete días; no sustituyen una política propia
+de respaldos. La base se crea vacía en `/var/data`; no se migran sesiones temporales que hubiera
+en `/tmp`.
 
 El registro público está abierto. Cada usuario crea su cuenta, vincula su propio conector y puede
 revocarlo desde la web. No se suben dibujos DWG, pero prompts, historial y resultados de
@@ -92,10 +104,9 @@ una política de privacidad y retención apropiada.
 5. Abre **Mi PC**, genera un código temporal e ingrésalo en el conector.
 6. Comprueba que el estado del conector y Ollama aparece conectado antes de enviar una orden.
 
-Si el proyecto ya está enlazado a Render como Blueprint, sincroniza el Blueprint después de
-publicar cambios en `render.yaml` y acepta el cambio al plan pagado y la creación del disco. Antes
-de probar, confirma en el Dashboard que el disco está montado y que `DATABASE_PATH` apunta a
-`/var/data/ingenia.db`. Si no hay almacenamiento persistente, no habilites cuentas.
+Si creas un servicio nuevo desde Blueprint, revisa cargos y ajustes antes de sincronizar. Para el
+servicio existente, aplica los cambios desde sus páginas **Compute**, **Disks** y **Environment**.
+Si no hay almacenamiento persistente, no habilites cuentas.
 
 ### Docker en cualquier proveedor
 

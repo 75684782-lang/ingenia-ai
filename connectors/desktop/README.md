@@ -46,7 +46,7 @@ de archivos ni código arbitrario enviados por la web.
 
 ## Estado de despliegue
 
-El servicio de Render está configurado con cuentas y conectores activados y SQLite persistente.
-Si el emparejamiento falla, comprueba que el despliegue del Blueprint finalizó y que
-`/api/auth/mode` responde con `"accounts":true`. No intentes vincular el conector si el servidor
-indica que las cuentas o los agentes están deshabilitados.
+El código está listo para cuentas y conectores, pero el servicio de Render debe tener el disco
+persistente y las variables `INGENIA_ACCOUNTS=true` e `INGENIA_USE_AGENTS=true` aplicadas antes
+de emparejar. Confirma que `/api/auth/mode` responde con `"accounts":true`; no intentes vincular
+el conector si el servidor indica que las cuentas o los agentes están deshabilitados.

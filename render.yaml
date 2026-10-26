@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: ingenia-ai-demo
+    name: ingenia-ai
     runtime: python
     plan: starter
     buildCommand: pip install -r backend/requirements-prod.txt
