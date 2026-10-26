@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: ingenia-ai-demo
+    runtime: python
+    plan: free
+    buildCommand: pip install -r backend/requirements-prod.txt
+    startCommand: uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips=*
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.10
+      - key: INGENIA_ALLOW_REMOTE
+        value: "true"
+      - key: INGENIA_COOKIE_SECURE
+        value: "true"
+      - key: INGENIA_AUTH_TOKEN
+        generateValue: true
+      - key: DATABASE_PATH
+        value: /tmp/ingenia.db
+      - key: CIVIL3D_FALLBACK_TO_MOCK
+        value: "true"
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "120"

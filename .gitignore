@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+backend/.env
+backend/data/*.db
+backend/data/*.db-*
+backend/logs/
+*.log
+backend/.ingenia.pid
+
+# .NET / Civil 3D
+connectors/civil3d/source/bin/
+connectors/civil3d/source/obj/
+*.user
+.vs/
+
+# Editor / OS
+.vscode/
+Thumbs.db
+desktop.ini

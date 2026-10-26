@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <title>Ingenia AI · Asistente Civil 3D</title>
+  <link rel="icon" href="/assets/icons/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/assets/css/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">IA</div>
+        <div class="brand-text">
+          <strong>Ingenia AI</strong>
+          <span>Civil 3D Assistant</span>
+        </div>
+      </div>
+
+      <button class="btn btn-primary btn-block" id="new-chat">
+        <span class="icon">＋</span> Nuevo chat
+      </button>
+
+      <div class="side-section">
+        <div class="side-heading">
+          <span>Historial</span>
+          <button class="icon-btn" id="refresh-history" title="Actualizar historial">⟳</button>
+        </div>
+        <div class="history" id="history-list">
+          <p class="empty-hint">Aún no hay conversaciones.</p>
+        </div>
+      </div>
+
+      <nav class="side-nav" aria-label="Secciones">
+        <button class="nav-item" data-focus="tools"><span class="nav-glyph">◈</span> Herramientas</button>
+        <button class="nav-item" data-focus="status"><span class="nav-glyph">◎</span> Conexiones</button>
+        <button class="nav-item" data-focus="models"><span class="nav-glyph">◇</span> Modelos de IA</button>
+        <button class="nav-item" data-focus="config"><span class="nav-glyph">⚙</span> Configuración</button>
+      </nav>
+
+      <div class="side-footer">
+        <div class="mini-status"><span class="dot" id="dot-ollama"></span> Ollama <em id="ollama-label">—</em></div>
+        <div class="mini-status"><span class="dot" id="dot-civil"></span> Civil 3D <em id="civil-label">—</em></div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="icon-btn menu-btn" id="toggle-sidebar" aria-label="Menú">☰</button>
+        <div class="topbar-title">
+          <h1 id="chat-title">Nueva conversación</h1>
+          <p id="chat-subtitle">Conversa en español y opera Civil 3D mediante herramientas verificadas.</p>
+        </div>
+        <div class="topbar-status">
+          <span class="pill" id="pill-ollama"><span class="dot"></span> Ollama</span>
+          <span class="pill" id="pill-civil"><span class="dot"></span> Civil 3D</span>
+        </div>
+        <button class="icon-btn" id="toggle-panel" aria-label="Panel de estado">▤</button>
+      </header>
+
+      <section class="chat-scroll" id="chat-scroll">
+        <div class="chat" id="chat">
+          <div class="welcome" id="welcome">
+            <div class="welcome-mark">IA</div>
+            <h2>Asistente de ingeniería local</h2>
+            <p>Consulto el dibujo abierto y ejecuto operaciones reales en Civil 3D. Todo el procesamiento de IA ocurre en tu equipo mediante Ollama.</p>
+            <div class="suggestions">
+              <button class="suggestion">Analiza el dibujo abierto y dime qué objetos contiene</button>
+              <button class="suggestion">Enumera las superficies y sus datos</button>
+              <button class="suggestion">Lista los alineamientos existentes</button>
+              <button class="suggestion">Crea una superficie llamada Terreno Natural</button>
+            </div>
+            <p class="welcome-note" id="welcome-note">Comprobando conexiones…</p>
+          </div>
+        </div>
+      </section>
+
+      <footer class="composer-wrap">
+        <div class="composer" id="composer">
+          <textarea id="prompt" rows="1" placeholder="Escribe una orden en español…  (Enter para enviar, Shift+Enter para salto de línea)"></textarea>
+          <div class="composer-actions">
+            <button class="btn btn-ghost" id="stop-btn" disabled>■ Detener</button>
+            <button class="btn btn-primary" id="send-btn">Enviar ➤</button>
+          </div>
+        </div>
+        <div class="composer-meta">
+          <span id="model-badge">Modelo: —</span>
+          <span class="muted">Sin código arbitrario · Confirmación para escrituras · Registro de operaciones</span>
+        </div>
+      </footer>
+    </main>
+
+    <aside class="panel" id="panel">
+      <div class="panel-scroll">
+        <section class="card" id="card-status">
+          <div class="card-head"><h3>Conexiones</h3><span class="tag">estado</span></div>
+          <div class="status-row">
+            <span class="dot" id="p-dot-ollama"></span>
+            <div><strong>Ollama</strong><small id="p-ollama">Comprobando…</small></div>
+          </div>
+          <div class="status-row">
+            <span class="dot" id="p-dot-civil"></span>
+            <div><strong>Civil 3D</strong><small id="p-civil">Comprobando…</small></div>
+          </div>
+          <div class="kv"><span>Dibujo activo</span><strong id="p-drawing">—</strong></div>
+          <div class="kv"><span>Modo</span><strong id="p-mode">—</strong></div>
+        </section>
+
+        <section class="card" id="card-models">
+          <div class="card-head"><h3>Modelo de IA</h3><span class="tag">Ollama</span></div>
+          <label class="field">
+            <span>Modelo local</span>
+            <select id="model-select"><option value="">Cargando…</option></select>
+          </label>
+          <p class="hint" id="model-hint">Se muestran los modelos instalados; los que admiten herramientas están marcados.</p>
+          <div class="pull-row">
+            <input id="pull-model" type="text" placeholder="ej. qwen2.5-coder:1.5b" autocomplete="off" spellcheck="false" />
+            <button class="btn" id="pull-btn">Descargar</button>
+          </div>
+          <div class="pull-bar"><i id="pull-bar-fill"></i></div>
+          <div class="pull-status" id="pull-status">Descarga modelos directamente desde Ollama; no se incluye ninguna IA en la web.</div>
+        </section>
+
+        <section class="card" id="card-tools">
+          <div class="card-head"><h3>Herramientas</h3><span class="tag" id="tools-count">0</span></div>
+          <div class="tool-list" id="tool-list"><p class="empty-hint">Cargando…</p></div>
+        </section>
+
+        <section class="card" id="card-operations">
+          <div class="card-head"><h3>Últimas operaciones</h3><button class="icon-btn" id="refresh-ops" title="Actualizar">⟳</button></div>
+          <div class="op-list" id="op-list"><p class="empty-hint">Sin operaciones registradas.</p></div>
+        </section>
+
+        <section class="card" id="card-config">
+          <div class="card-head"><h3>Configuración</h3><span class="tag">local</span></div>
+          <div class="kv"><span>API</span><strong id="cfg-api">—</strong></div>
+          <div class="kv"><span>Modelo por defecto</span><strong id="cfg-model">—</strong></div>
+          <div class="kv"><span>Fallback simulado</span><strong id="cfg-fallback">—</strong></div>
+          <p class="hint">El servicio escucha solo en 127.0.0.1. Cambia tokens y puertos en <code>backend/.env</code>.</p>
+        </section>
+      </div>
+    </aside>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="/assets/js/app.js"></script>
+</body>
+</html>
