@@ -325,6 +325,70 @@ button, select, textarea { font-family: inherit; }
 .op-item .op-meta b.pending_confirmation { color: var(--amber); }
 .empty-hint { margin: 2px 0; font-size: 10.5px; color: var(--muted); }
 
+/* ------------------------------ guide modal ---------------------------- */
+body.modal-open { overflow: hidden; }
+.pill[hidden], .demo-pill[hidden] { display: none; }
+.demo-pill {
+  background: transparent; cursor: pointer; font: inherit;
+  border-color: rgba(96, 165, 250, 0.45); color: #9ec5ff;
+}
+.demo-pill:hover { background: rgba(96, 165, 250, 0.1); }
+.guide-btn { padding: 6px 11px; font-size: 11.5px; white-space: nowrap; }
+
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 80;
+  display: grid; place-items: center; padding: 22px;
+  background: rgba(4, 9, 15, 0.72); backdrop-filter: blur(6px);
+  animation: fade-in 0.16s ease;
+}
+.modal-backdrop[hidden] { display: none; }
+.modal {
+  width: min(780px, 100%); max-height: 88vh;
+  display: flex; flex-direction: column;
+  background: linear-gradient(180deg, #101a25, #0c141d);
+  border: 1px solid #23384b; border-radius: 16px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+}
+.modal-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;
+  padding: 18px 20px 14px; border-bottom: 1px solid var(--line);
+}
+.modal-head h2 { margin: 6px 0 0; font-size: 19px; font-weight: 600; letter-spacing: -0.2px; }
+.modal-body { padding: 16px 20px 6px; overflow-y: auto; }
+.modal-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 12px 20px 16px; border-top: 1px solid var(--line);
+}
+.modal-buttons { display: flex; gap: 8px; }
+.modal-note {
+  margin-bottom: 14px; padding: 11px 13px; border-radius: 10px;
+  background: rgba(96, 165, 250, 0.09); border: 1px solid rgba(96, 165, 250, 0.3);
+  color: #cfe3ff; font-size: 12px; line-height: 1.55;
+}
+.guide-intro { margin: 0 0 14px; font-size: 12.5px; line-height: 1.6; color: var(--text-dim); }
+.guide-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.guide-steps li { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 11px; }
+.guide-steps li > div { padding-top: 1px; }
+.guide-steps strong { font-size: 12.5px; font-weight: 600; color: var(--text); }
+.guide-steps p { margin: 4px 0 0; font-size: 11.8px; line-height: 1.62; color: var(--muted); }
+.guide-steps code {
+  font-family: var(--mono); font-size: 10.8px; color: #b9d2ea;
+  background: #0a121a; border: 1px solid #1d2c3a; border-radius: 5px; padding: 1px 5px;
+}
+.guide-steps a { color: #8fc2ff; }
+.guide-steps a:hover { text-decoration: underline; }
+.step-num {
+  width: 26px; height: 26px; display: grid; place-items: center;
+  border-radius: 50%; background: rgba(59, 130, 246, 0.14);
+  border: 1px solid rgba(59, 130, 246, 0.4); color: #a9ccff;
+  font-size: 11px; font-weight: 600;
+}
+.guide-links { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 10px; }
+.guide-links .btn { padding: 6px 11px; font-size: 11px; text-decoration: none; }
+.guide-check { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--muted); cursor: pointer; }
+.guide-check input { accent-color: var(--accent); }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
 /* -------------------------------- toast ------------------------------- */
 .toast {
   position: fixed; bottom: 22px; left: 50%; transform: translate(-50%, 18px);
@@ -359,8 +423,16 @@ button, select, textarea { font-family: inherit; }
   .menu-btn { display: inline-flex; }
   .topbar { padding: 12px 14px; }
   .topbar-status { display: none; }
+  .guide-btn { display: none; }
   .chat { padding: 20px 14px 8px; }
   .suggestions { grid-template-columns: 1fr; }
   .composer-wrap { padding: 8px 12px 12px; }
   .composer-meta { display: none; }
+  .modal-backdrop { padding: 10px; }
+  .modal { max-height: 94vh; }
+  .modal-head { padding: 15px 15px 12px; }
+  .modal-body { padding: 13px 15px 4px; }
+  .modal-foot { flex-direction: column; align-items: stretch; padding: 11px 15px 14px; }
+  .modal-buttons { justify-content: flex-end; }
+  .guide-links .btn { flex: 1; justify-content: center; }
 }

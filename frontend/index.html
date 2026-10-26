@@ -38,6 +38,7 @@
         <button class="nav-item" data-focus="status"><span class="nav-glyph">◎</span> Conexiones</button>
         <button class="nav-item" data-focus="models"><span class="nav-glyph">◇</span> Modelos de IA</button>
         <button class="nav-item" data-focus="config"><span class="nav-glyph">⚙</span> Configuración</button>
+        <button class="nav-item" id="open-guide-nav"><span class="nav-glyph">?</span> Guía de uso</button>
       </nav>
 
       <div class="side-footer">
@@ -54,9 +55,11 @@
           <p id="chat-subtitle">Conversa en español y opera Civil 3D mediante herramientas verificadas.</p>
         </div>
         <div class="topbar-status">
+          <button class="pill demo-pill" id="demo-pill" hidden>Demo alojada</button>
           <span class="pill" id="pill-ollama"><span class="dot"></span> Ollama</span>
           <span class="pill" id="pill-civil"><span class="dot"></span> Civil 3D</span>
         </div>
+        <button class="btn btn-ghost guide-btn" id="open-guide" title="Guía de uso">? Guía</button>
         <button class="icon-btn" id="toggle-panel" aria-label="Panel de estado">▤</button>
       </header>
 
@@ -142,6 +145,108 @@
         </section>
       </div>
     </aside>
+  </div>
+
+  <div class="modal-backdrop" id="guide-modal" hidden>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="guide-title">
+      <header class="modal-head">
+        <div>
+          <span class="tag">Primeros pasos</span>
+          <h2 id="guide-title">Cómo usar Ingenia AI</h2>
+        </div>
+        <button class="icon-btn" id="guide-close" aria-label="Cerrar guía">✕</button>
+      </header>
+      <div class="modal-body">
+        <div class="modal-note" id="guide-demo-note" hidden>
+          <strong>Estás en la demo alojada.</strong> Aquí solo se prueba la interfaz: no hay Ollama ni
+          Civil 3D. Para trabajar con tus dibujos, instala la aplicación en tu PC siguiendo estos pasos.
+        </div>
+        <p class="guide-intro">
+          Ingenia AI es un asistente <strong>local</strong>: la inteligencia artificial corre en tu
+          equipo mediante Ollama y el control de Civil 3D ocurre dentro de AutoCAD. Tus dibujos no se
+          envían a ningún servidor.
+        </p>
+        <ol class="guide-steps">
+          <li>
+            <span class="step-num">1</span>
+            <div>
+              <strong>Comprueba los requisitos</strong>
+              <p>Windows 10 u 11, Autodesk Civil 3D 2023–2026, Ollama instalado y Python 3.12 si usas el ZIP.</p>
+            </div>
+          </li>
+          <li>
+            <span class="step-num">2</span>
+            <div>
+              <strong>Instala Ollama y descarga un modelo</strong>
+              <p>
+                Descarga Ollama desde
+                <a href="https://ollama.com/download" target="_blank" rel="noopener">ollama.com/download</a>.
+                Luego ejecuta <code>ollama pull qwen2.5-coder:1.5b</code> o usa el panel
+                <em>Modelos de IA</em> de esta app y pulsa <em>Descargar</em>. La web no incluye ninguna IA:
+                el modelo se descarga en tu equipo.
+              </p>
+            </div>
+          </li>
+          <li>
+            <span class="step-num">3</span>
+            <div>
+              <strong>Descarga y arranca Ingenia AI</strong>
+              <p>
+                Descarga el
+                <a href="https://github.com/75684782-lang/ingenia-ai/archive/refs/heads/main.zip" target="_blank" rel="noopener">ZIP del proyecto</a>,
+                descomprímelo y ejecuta <code>scripts\start.bat</code>. Se abrirá
+                <code>http://127.0.0.1:8000</code> en tu navegador. No uses la demo alojada para operar dibujos reales.
+              </p>
+            </div>
+          </li>
+          <li>
+            <span class="step-num">4</span>
+            <div>
+              <strong>Instala el complemento en Civil 3D</strong>
+              <p>
+                Compila el plugin y copia el <code>.bundle</code> en
+                <code>%APPDATA%\Autodesk\ApplicationPlugins\</code>. Abre Civil 3D y ejecuta el comando
+                <code>INGENIABRIDGE</code>. Consulta la
+                <a href="https://github.com/75684782-lang/ingenia-ai/blob/main/docs/civil3d-integration.md" target="_blank" rel="noopener">guía de integración</a>.
+              </p>
+            </div>
+          </li>
+          <li>
+            <span class="step-num">5</span>
+            <div>
+              <strong>Trabaja en español</strong>
+              <p>
+                Abre un dibujo en Civil 3D, elige el modelo en el panel derecho y escribe tu orden.
+                Las consultas se ejecutan al momento; las operaciones que modifican el dibujo piden
+                confirmación antes de aplicarse.
+              </p>
+            </div>
+          </li>
+          <li>
+            <span class="step-num">6</span>
+            <div>
+              <strong>Mantén todo local</strong>
+              <p>
+                No expongas los puertos <code>8756</code> ni <code>11434</code> a internet. El token y
+                los puertos se configuran en <code>backend\.env</code>.
+              </p>
+            </div>
+          </li>
+        </ol>
+        <div class="guide-links">
+          <a class="btn btn-ghost" href="https://github.com/75684782-lang/ingenia-ai" target="_blank" rel="noopener">Ver repositorio</a>
+          <a class="btn btn-ghost" href="https://github.com/75684782-lang/ingenia-ai/blob/main/docs/installation.md" target="_blank" rel="noopener">Instalación detallada</a>
+          <a class="btn btn-ghost" href="https://github.com/75684782-lang/ingenia-ai/blob/main/docs/civil3d-integration.md" target="_blank" rel="noopener">Plugin Civil 3D</a>
+        </div>
+      </div>
+      <footer class="modal-foot">
+        <label class="guide-check"><input type="checkbox" id="guide-hide" /> No volver a mostrar al entrar</label>
+        <div class="modal-buttons">
+          <button class="btn btn-ghost" id="guide-skip">Cerrar</button>
+          <button class="btn btn-primary" id="guide-start">Empezar</button>
+        </div>
+      </footer>
+    </section>
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>

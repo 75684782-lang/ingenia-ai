@@ -428,6 +428,7 @@ function bindEvents() {
   $$(".nav-item").forEach((item) => {
     item.addEventListener("click", () => {
       const target = item.dataset.focus;
+      if (!target) return;
       const shells = document.querySelector(".app-shell");
       shells.classList.add("panel-open");
       const card = document.querySelector(`#card-${target}`);
@@ -436,8 +437,68 @@ function bindEvents() {
   });
 }
 
+const GUIDE_SEEN_KEY = "ingenia.guide.seen.v1";
+const GUIDE_SESSION_KEY = "ingenia.guide.session.v1";
+
+function isLocalApp() {
+  return ["localhost", "127.0.0.1", "::1", "[::1]"].includes(location.hostname);
+}
+
+function openGuide() {
+  const modal = $("#guide-modal");
+  if (!modal) return;
+  modal.hidden = false;
+  document.body.classList.add("modal-open");
+  $("#guide-close").focus();
+}
+
+function closeGuide() {
+  const modal = $("#guide-modal");
+  if (!modal) return;
+  modal.hidden = true;
+  document.body.classList.remove("modal-open");
+  sessionStorage.setItem(GUIDE_SESSION_KEY, "1");
+  if ($("#guide-hide").checked) localStorage.setItem(GUIDE_SEEN_KEY, "1");
+}
+
+function initGuide() {
+  const demo = !isLocalApp();
+  if (demo) {
+    $("#guide-demo-note").hidden = false;
+    const pill = $("#demo-pill");
+    if (pill) pill.hidden = false;
+    setSubtitle("Demo alojada · La IA y Civil 3D se ejecutan en tu PC. Abre la Guía para instalarla.");
+  }
+  $("#guide-hide").checked = Boolean(localStorage.getItem(GUIDE_SEEN_KEY));
+
+  $("#open-guide").addEventListener("click", openGuide);
+  $("#open-guide-nav").addEventListener("click", openGuide);
+  const demoPill = $("#demo-pill");
+  if (demoPill) demoPill.addEventListener("click", openGuide);
+  $("#guide-close").addEventListener("click", closeGuide);
+  $("#guide-skip").addEventListener("click", closeGuide);
+  $("#guide-start").addEventListener("click", closeGuide);
+  $("#guide-modal").addEventListener("click", (event) => {
+    if (event.target.id === "guide-modal") closeGuide();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !$("#guide-modal").hidden) closeGuide();
+  });
+  $("#guide-hide").addEventListener("change", (event) => {
+    if (event.target.checked) localStorage.setItem(GUIDE_SEEN_KEY, "1");
+    else localStorage.removeItem(GUIDE_SEEN_KEY);
+  });
+
+  const seen = localStorage.getItem(GUIDE_SEEN_KEY);
+  const seenThisSession = sessionStorage.getItem(GUIDE_SESSION_KEY);
+  if (!seen && !seenThisSession) {
+    setTimeout(openGuide, 350);
+  }
+}
+
 async function init() {
   bindEvents();
+  initGuide();
   updateButtons();
   autoSize();
 
@@ -453,6 +514,13 @@ async function init() {
 
   await Promise.all([loadModels(), refreshTools(), refreshStatus(), refreshHistory(), refreshOperations()]);
   connectStatusSocket();
+
+  if (!isLocalApp()) {
+    const note = $("#welcome-note");
+    if (note) {
+      note.textContent = "Demo alojada: descarga e instala la app para conectar tu Ollama y Civil 3D.";
+    }
+  }
 
   const saved = localStorage.getItem("ingenia.session");
   if (saved) {
